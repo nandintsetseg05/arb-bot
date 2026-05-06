@@ -1,6 +1,11 @@
 # poly-arbitrage-bot
 
-> Status: **in development, paper mode only.** Live trading exists but is gated behind both an env flag and an explicit CLI flag. Test thoroughly before risking real funds.
+[![tests](https://github.com/zostaff/poly-arbitrage-bot/actions/workflows/test.yml/badge.svg)](https://github.com/zostaff/poly-arbitrage-bot/actions/workflows/test.yml)
+[![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![status](https://img.shields.io/badge/status-alpha-orange)](#status)
+
+> **Status: alpha. Paper mode only is recommended.** Live trading exists but is gated behind an env flag, an explicit CLI flag, and a balance sanity cap. The author runs this in paper mode and accepts no responsibility for live-mode losses. Read [SECURITY.md](SECURITY.md) before running.
 
 Arbitrage bot for prediction markets. Two strategies:
 
@@ -111,6 +116,12 @@ The arbitrage math suite includes the canonical 3-case strike comparison from pr
 
 ---
 
+## Contributing
+
+Issues and PRs welcome. See [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) for issue templates and [`CHANGELOG.md`](CHANGELOG.md) for release history. Security issues: please follow [SECURITY.md](SECURITY.md) and **do not** open a public issue for vulnerabilities.
+
+---
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
@@ -119,4 +130,10 @@ MIT. See [LICENSE](LICENSE).
 
 ## Disclaimer
 
-This is research software for prediction-market arbitrage. Not financial advice. Prediction markets carry real risk including total loss of capital, regulatory action, and resolution disputes. The author makes no guarantee of profit and accepts no liability for losses. Read [REFACTOR_PLAN.md](REFACTOR_PLAN.md) "Risks" section before going live.
+This is research software for prediction-market arbitrage. **It is not financial advice. It comes with no warranty.**
+
+Prediction markets carry real risk including but not limited to: total loss of deposited capital, resolution disputes, exchange-side bugs, regulatory action, network outages, partial fills, fee miscalculations, and model error. The author runs this bot in paper mode only and **makes no guarantee of profit** under any conditions.
+
+If you choose to run this bot in live mode against real funds, that decision is yours alone. The author accepts **no liability** for losses, missed opportunities, regulatory consequences, or any other harm arising from use of this software.
+
+Read [REFACTOR_PLAN.md](REFACTOR_PLAN.md) "Risks" section and [SECURITY.md](SECURITY.md) before going live.

@@ -1,0 +1,93 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "poly-arbitrage-bot"
+version = "0.1.0"
+description = "Cross-exchange + intra-Polymarket arbitrage bot for prediction markets."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "zostaff" }]
+requires-python = ">=3.11"
+keywords = ["polymarket", "kalshi", "arbitrage", "prediction-markets"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+    "py-clob-client>=0.34.0",
+    "httpx>=0.27.0",
+    "cryptography>=42.0.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "python-dotenv>=1.0.1",
+    "tenacity>=8.5.0",
+    "rapidfuzz>=3.9.0",
+    "streamlit>=1.36.0",
+    "pandas>=2.2.0",
+    "altair>=5.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "black>=24.4.0",
+    "isort>=5.13.0",
+    "mypy>=1.10.0",
+    "ruff>=0.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/zostaff/poly-arbitrage-bot"
+Issues = "https://github.com/zostaff/poly-arbitrage-bot/issues"
+
+[project.scripts]
+poly-arb-paper = "scripts.paper_run:main"
+poly-arb-live = "scripts.live_run:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "scripts*", "dashboard*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["src", "dashboard", "scripts"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["py_clob_client.*", "rapidfuzz.*", "streamlit.*", "altair.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "RUF"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+# asyncio_mode is set by pytest-asyncio when installed via the [dev] extra;
+# tests in this repo are pure-sync, so leaving it out keeps a default install
+# warning-free.

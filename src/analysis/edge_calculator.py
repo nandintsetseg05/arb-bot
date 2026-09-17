@@ -63,7 +63,7 @@ class CrossExchangeEdge:
         notional = (self.leg_a_price + self.leg_b_price) * self.contracts
         if notional <= 0:
             return 0
-        return int(round(10_000 * self.net_usd / notional))
+        return round(10_000 * self.net_usd / notional)
 
 
 def cross_exchange_edge(
@@ -115,7 +115,7 @@ class BundleEdge:
         notional = sum(self.prices) * self.contracts
         if notional <= 0:
             return 0
-        return int(round(10_000 * self.net_usd / notional))
+        return round(10_000 * self.net_usd / notional)
 
 
 def bundle_long_edge(

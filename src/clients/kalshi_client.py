@@ -225,7 +225,7 @@ class KalshiClient(BaseExchangeClient):
         side_str = "yes" if req.outcome is Outcome.YES else "no"
         action = "buy" if req.side is Side.BUY else "sell"
         # Kalshi prices: integer cents 1..99
-        price_cents = max(1, min(99, int(round(req.price * 100))))
+        price_cents = max(1, min(99, round(req.price * 100)))
         body: dict[str, Any] = {
             "ticker": req.market_id,
             "action": action,

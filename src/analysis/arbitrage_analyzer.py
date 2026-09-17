@@ -13,14 +13,13 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Sequence
 
 from src.analysis.edge_calculator import (
     POLYMARKET_DEFAULT_TAKER_BPS,
     BundleEdge,
-    CrossExchangeEdge,
     bundle_long_edge,
     bundle_short_edge,
     cross_exchange_edge,
@@ -168,7 +167,7 @@ class ArbitrageAnalyzer:
         notional = poly_notional + kalshi_notional
         if notional <= 0:
             return None
-        bps = int(round(10_000 * net_after_buffer / notional))
+        bps = round(10_000 * net_after_buffer / notional)
         if bps < self.min_edge_bps:
             return None
 
@@ -232,7 +231,7 @@ class ArbitrageAnalyzer:
         net_after_buffer = edge.net_usd - slip_buffer
         if notional <= 0:
             return None
-        bps = int(round(10_000 * net_after_buffer / notional))
+        bps = round(10_000 * net_after_buffer / notional)
         if bps < self.min_edge_bps:
             return None
         legs = tuple(
@@ -244,7 +243,7 @@ class ArbitrageAnalyzer:
                 price=f.avg_price,
                 size=float(contracts),
             )
-            for b, f in zip(outcome_books, fills)
+            for b, f in zip(outcome_books, fills, strict=False)
         )
         return Opportunity(
             arb_type=ArbType.BUNDLE,
@@ -284,7 +283,7 @@ class ArbitrageAnalyzer:
         net_after_buffer = edge.net_usd - slip_buffer
         if notional <= 0:
             return None
-        bps = int(round(10_000 * net_after_buffer / notional))
+        bps = round(10_000 * net_after_buffer / notional)
         if bps < self.min_edge_bps:
             return None
         legs = tuple(
@@ -296,7 +295,7 @@ class ArbitrageAnalyzer:
                 price=f.avg_price,
                 size=float(contracts),
             )
-            for b, f in zip(outcome_books, fills)
+            for b, f in zip(outcome_books, fills, strict=False)
         )
         return Opportunity(
             arb_type=ArbType.BUNDLE,

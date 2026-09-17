@@ -14,9 +14,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC
 from enum import Enum
-from typing import Mapping
 
 from src.analysis.arbitrage_analyzer import Opportunity
 from src.clients.base import (
@@ -220,7 +221,7 @@ class Executor:
         )
         try:
             result = await client.place_order(req)
-        except Exception as exc:
+        except Exception:
             logger.exception("place_order failed", extra={"venue": leg.venue.value})
             self.db.update_leg(leg_id, status="error", settled_at=_iso_now())
             raise
@@ -281,6 +282,6 @@ class Executor:
 
 
 def _iso_now() -> str:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

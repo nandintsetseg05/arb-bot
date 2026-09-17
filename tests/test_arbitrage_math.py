@@ -21,7 +21,6 @@ from src.analysis.edge_calculator import (
     polymarket_taker_fee_usd,
 )
 
-
 # ----------------------------------------------------------------------
 # Cross-exchange (binary)
 # ----------------------------------------------------------------------

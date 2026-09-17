@@ -83,7 +83,12 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "RUF"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # line length handled by formatter intent, not enforced here
+    "UP042",  # str+Enum is the repo's deliberate JSON-friendly enum style
+    "RUF002", # em-dash / × in docstrings are intentional
+    "RUF003", # em-dash / × in comments are intentional
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

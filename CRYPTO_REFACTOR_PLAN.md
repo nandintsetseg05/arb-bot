@@ -169,17 +169,23 @@ tables and the both-fill / one-leg / partial / stale-reject / latency-decay scen
 - **Tests:** divergence flagged when the two sources imply different UP/DOWN.
 - **Exit:** a running tally of "how often did the two indices disagree, and by how much."
 
-### Phase 8 — Reports & dashboard (1–2 days)
-**Goal:** make the evidence legible; enforce the "four numbers" rule in the UI.
-- `dashboard/app.py`: sections for observed gap, fee-adjusted theoretical margin, simulated
-  executable P&L, max matched size, partial-fill rate, rejected candidates + reasons, and the
-  divergence tally. Locked vs relative-value clearly separated. Data limitations shown explicitly.
-- **Exit:** dashboard never presents theoretical margin as realized profit.
+### Phase 8 — Reports & dashboard (DONE)
+- `dashboard/app.py` rewritten to read `scan_records`: label counts (locked/relative_value/reject),
+  a candidates table (observed gross gap vs fee-adjusted net margin), a rejections table with
+  reasons, and the balance curve. Simulated-executable P&L is shown as pending Phase 4/6b; nothing
+  is presented as realized profit.
+- (Not run in the sandbox — no Streamlit here; run `streamlit run dashboard/app.py`.)
 
-### Phase 9 — Test suite + CI hardening (ongoing)
-- Full matrix: truth tables, settlement-mismatch rejection, tie/equality, decimal fees + rounding,
-  depth/VWAP, stale-book rejection, partial/one-leg fills, fail-closed live, registry eligibility.
-- CI: make mypy strict blocking on new modules; pin dependencies (add a lockfile).
+### Phase 9 — CI + dependency pinning (DONE, partial)
+- Repo-wide ruff now passes on the CI command (`ruff check src tests scripts dashboard`): safe
+  modernizations applied; `UP042` (deliberate str+Enum) and `RUF002/003` (em-dash/× in comments)
+  ignored in `pyproject.toml`.
+- `requirements.txt`: pinned lockfile via pip-compile (`--extra dev`). NOTE: generated on Python
+  3.13; regenerate on the 3.11 floor for production installs. CI still installs the pyproject
+  ranges on 3.11/3.12 (range-breakage coverage); the lock is for reproducible installs.
+- Still open: mypy is left informational (`continue-on-error`) — making it strict-blocking is a
+  separate cleanup; the full test matrix (truth tables, stale-book, partial/one-leg) grows with
+  Phases 4/6b.
 
 ### Gate — evaluate, then (only maybe) discuss a tiny live pilot
 Run Scanners A+B in paper for a sustained, reproducible period. Only if the recorded evidence passes

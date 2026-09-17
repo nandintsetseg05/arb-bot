@@ -18,7 +18,7 @@ This is a deliberate conservative default; flag the position and surface it.
 from __future__ import annotations
 
 import logging
-from typing import Mapping
+from collections.abc import Mapping
 
 from src.clients.base import BaseExchangeClient, OrderResult, Venue
 from src.storage.db import Database

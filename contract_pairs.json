@@ -1,0 +1,40 @@
+{
+  "_about": "Human-reviewed registry of crypto contract pairs to observe (CRYPTO_REFACTOR_PLAN.md Phase 2). Edit by hand; a pair becomes eligible for paper simulation ONLY when a human sets review_status: approved AND both legs are verified against a settlement snapshot. Eligible != risk-free; the settlement-equivalence validator (Phase 3) decides locked vs relative-value. The entry below is an EXAMPLE template (pending, unverified) so nothing is eligible until reviewed.",
+  "pairs": [
+    {
+      "pair_id": "BTC-15m-EXAMPLE",
+      "asset": "BTC",
+      "review_status": "pending",
+      "reviewer_note": "EXAMPLE only — replace market ids/window with a real pair, verify rules, then approve.",
+      "kalshi": {
+        "market_id": "KXBTC15M-EXAMPLE",
+        "utc_start": "2026-09-17T00:00:00Z",
+        "utc_end": "2026-09-17T00:15:00Z",
+        "settlement_source": "CF Benchmarks",
+        "source_instrument": "BRTI",
+        "observation_window_seconds": 60,
+        "averaging_method": "60s arithmetic mean of RTI prints",
+        "comparison_operator": ">=",
+        "tie_rule": "binary end >= start resolves Up",
+        "void_policy": "UNVERIFIED",
+        "rules_snapshot_ref": "docs/settlement_rules/2026-09-17.json",
+        "verified": false
+      },
+      "polymarket": {
+        "market_id": "0xEXAMPLE_condition_id",
+        "outcome_token_ids": ["EXAMPLE_up_token", "EXAMPLE_down_token"],
+        "utc_start": "2026-09-17T00:00:00Z",
+        "utc_end": "2026-09-17T00:15:00Z",
+        "settlement_source": "Chainlink",
+        "source_instrument": "BTC/USD TWAP",
+        "observation_window_seconds": 60,
+        "averaging_method": "Chainlink TWAP",
+        "comparison_operator": ">=",
+        "tie_rule": "binary end >= start resolves Up",
+        "void_policy": "UNVERIFIED",
+        "rules_snapshot_ref": "docs/settlement_rules/2026-09-17.json",
+        "verified": false
+      }
+    }
+  ]
+}

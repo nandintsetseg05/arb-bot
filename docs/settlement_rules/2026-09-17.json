@@ -1,0 +1,66 @@
+{
+  "_about": "Settlement-rule snapshot for short-window crypto markets. Required by CRYPTO_REFACTOR_PLAN.md rule #1 (evidence). Re-capture from the live market page at build time; these products changed in Aug 2026. `verified` = confirmed from a cited source this date; anything false must be treated as UNVERIFIED and excluded from 'locked' logic.",
+  "fetched_at": "2026-09-17",
+  "snapshots": [
+    {
+      "venue": "kalshi",
+      "asset": "BTC",
+      "window": "15m",
+      "settlement_source": "CF Benchmarks",
+      "source_instrument": "BRTI (Bitcoin Real-Time Index)",
+      "observation_window_seconds": 60,
+      "averaging_method": "arithmetic mean of ~60 one-per-second RTI prints in the final minute",
+      "comparison_operator": ">=",
+      "tie_rule": "binary; end >= start resolves Up (no separate tie outcome)",
+      "void_policy": "UNVERIFIED — confirm per-market rules text",
+      "source_url": "https://help.kalshi.com/en/articles/13823838-crypto-markets",
+      "verified": true,
+      "notes": "60-second average of CF Benchmarks Real-Time Index at expiry."
+    },
+    {
+      "venue": "polymarket",
+      "asset": "BTC",
+      "window": "15m",
+      "settlement_source": "Chainlink",
+      "source_instrument": "BTC/USD TWAP (Chainlink Data Streams)",
+      "observation_window_seconds": 60,
+      "averaging_method": "Chainlink-computed TWAP; same feed used for open and settle",
+      "comparison_operator": ">=",
+      "tie_rule": "binary; end >= start resolves Up",
+      "void_policy": "UNVERIFIED — confirm per-market rules text",
+      "source_url": "https://genfinity.io/2026/08/12/chainlink-twap-data-streams-polymarket-crypto-markets/",
+      "verified": true,
+      "notes": "Aug 2026 rollout moved 5/15-min up/down markets to a Chainlink TWAP (60s window for 15m)."
+    },
+    {
+      "venue": "kalshi",
+      "asset": "ETH",
+      "window": "15m",
+      "settlement_source": "CF Benchmarks",
+      "source_instrument": "ETH Real-Time Index (assumed analogous to BTC BRTI)",
+      "observation_window_seconds": 60,
+      "averaging_method": "assumed same 60s RTI average as BTC",
+      "comparison_operator": ">=",
+      "tie_rule": "assumed binary end >= start",
+      "void_policy": "UNVERIFIED",
+      "source_url": "https://help.kalshi.com/en/articles/13823838-crypto-markets",
+      "verified": false,
+      "notes": "ETH mechanics ASSUMED to mirror BTC; not separately confirmed this date. Do not treat as locked until verified."
+    },
+    {
+      "venue": "polymarket",
+      "asset": "ETH",
+      "window": "15m",
+      "settlement_source": "Chainlink",
+      "source_instrument": "ETH/USD TWAP (assumed analogous to BTC)",
+      "observation_window_seconds": 60,
+      "averaging_method": "assumed Chainlink TWAP",
+      "comparison_operator": ">=",
+      "tie_rule": "assumed binary end >= start",
+      "void_policy": "UNVERIFIED",
+      "source_url": "https://genfinity.io/2026/08/12/chainlink-twap-data-streams-polymarket-crypto-markets/",
+      "verified": false,
+      "notes": "ETH mechanics ASSUMED to mirror BTC; not separately confirmed this date."
+    }
+  ]
+}

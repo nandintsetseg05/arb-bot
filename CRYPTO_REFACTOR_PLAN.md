@@ -98,9 +98,13 @@ Each phase is self-contained and ends with tests + an exit criterion. Do them in
   outcome mapping, UTC start/end, settlement source, instrument, window seconds, operator, averaging
   method, tie rule, void policy, rules-snapshot ref, review_status, reviewer_note). Extend `Market`
   to carry outcome token ids for multi-outcome (also fixes the known bundle-discovery bug).
-- New `src/registry/pair_registry.py`: load/validate a `contract_pairs` table; a pair is only
-  `ELIGIBLE` after `review_status == "approved"`.
-- `src/storage/schema.sql` + `db.py`: tables `contract_specs`, `contract_pairs`, `rule_snapshots`.
+- New `src/registry/pair_registry.py`: load/validate a **git-tracked JSON registry file**
+  (`contract_pairs.json`) — a pair is only `ELIGIBLE` after a human sets `review_status:
+  approved` and both legs are `verified`. (ponytail: a reviewable file *is* the manual-review
+  workflow; no DB CRUD needed for human-curated config. DB tables are for immutable
+  observations/fills only, added in Phase 4/6.)
+- Rule snapshots live as JSON under `docs/settlement_rules/` (Phase 1), referenced by
+  `rules_snapshot_ref` on each spec.
 - **Tests:** registry load/validate; unreviewed pair is never eligible.
 - **Exit:** can register a BTC 15-min pair by asset + exact UTC window; ineligible until approved.
 

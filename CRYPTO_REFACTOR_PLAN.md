@@ -131,13 +131,16 @@ Each phase is self-contained and ends with tests + an exit criterion. Do them in
 
 ### Phase 5 — Executable economics: decimal fees + full-depth + two scanners (2–3 days)
 **Goal:** correct money math and the actual opportunity detection.
-- Convert `edge_calculator.py` money math to `decimal.Decimal`. New `src/analysis/fee_engine.py`:
-  `fee(venue, market, side, price, size, role, time)` using snapshotted current schedules; store
-  exact inputs + formula version per computed fee; **reject if fee data unavailable**.
-- Keep/extend `walk_asks`/`walk_bids` for full-depth VWAP and max matched pairs.
-- **Scanner A (intra-venue LOCKED):** same market, complementary legs, `Σ ask < $1` after fees.
-- **Scanner B (cross-venue RELATIVE-VALUE):** only for `NOT_LOCKED_ARBITRAGE` pairs; computes the
-  price gap but labels it directional-risk, never "arbitrage."
+- New `src/analysis/fee_engine.py` (Decimal): `kalshi_taker_fee` + `polymarket_taker_fee`;
+  **rejects (FeeDataUnavailable) when a fee rate is unknown** rather than guessing. (ponytail:
+  added *alongside* `edge_calculator.py`'s float functions rather than rewriting them, so existing
+  callers/tests keep working; the float versions are retired once nothing uses them.)
+- Reuse `walk_asks` for full-depth VWAP and max matched sets; sizing stays float, money is Decimal.
+- New `src/analysis/crypto_scanner.py`:
+  - **`scan_intra_venue_locked`** — same-venue complementary legs (`Σ ask < $1` after fees); one
+    settlement source ⇒ label `locked`.
+  - **`scan_cross_venue`** — gated by `validate_equivalence`; `REJECT` short-circuits, `LOCKED`
+    (rare) or `relative_value` otherwise. Never labels a mismatched pair "arbitrage."
 - **Tests:** decimal fee formula + rounding at boundaries; VWAP/max-pairs; scanner labelling
   (A→locked, B→relative_value), min-edge gating.
 - **Exit:** every detected opportunity carries a status label + the four separated numbers.

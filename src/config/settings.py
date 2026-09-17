@@ -43,11 +43,20 @@ class Settings(BaseSettings):
     kalshi_env: KalshiEnv = KalshiEnv.DEMO
 
     # Trading
+    # NOTE (crypto-research build): live trading is hard-disabled in code and
+    # fails closed regardless of this flag — see src/errors.py and the guards in
+    # execution/executor.py and scripts/live_run.py (CRYPTO_REFACTOR_PLAN.md Phase 0).
     live_trading_enabled: bool = False
+    paper_only: bool = True
     min_edge_bps: int = 50
     max_position_usd: float = 500.0
     quarter_kelly: bool = True
     drawdown_limit: float = 0.15
+
+    # Scope (crypto-only research build). Assets are matched case-insensitively
+    # against market metadata; window is the short-duration series we target first.
+    crypto_assets: tuple[str, ...] = ("BTC", "ETH")
+    market_window: str = "15m"
 
     # Matching
     match_auto_threshold: float = 0.85

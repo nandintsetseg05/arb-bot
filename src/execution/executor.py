@@ -25,6 +25,7 @@ from src.clients.base import (
     OrderResult,
     Venue,
 )
+from src.errors import LiveTradingDisabled
 from src.execution.partial_fill_recovery import attempt_recovery
 from src.risk.circuit_breaker import CircuitBreaker
 from src.risk.position_limits import PositionLimits
@@ -65,6 +66,9 @@ class Executor:
         self.ttl_ms = opportunity_ttl_ms
 
     async def handle(self, opp: Opportunity) -> ExecutionDecision:
+        # 0. Fail closed: the crypto-research build never trades live (Phase 0).
+        self._assert_live_allowed()
+
         # 1. Persist opportunity record (decision = traded/skipped/etc) regardless of action.
         opp_id = self._persist_opportunity(opp, decision="pending")
 
@@ -129,8 +133,21 @@ class Executor:
             notes="paper",
         )
 
+    def _assert_live_allowed(self) -> None:
+        """Trip wire for Phase 0: live mode is hard-disabled and fails closed."""
+        if self.mode is ExecutionMode.LIVE:
+            raise LiveTradingDisabled(
+                "Live execution is disabled in the crypto-research build "
+                "(CRYPTO_REFACTOR_PLAN.md Phase 0). Use paper mode."
+            )
+
     async def _execute_live(self, opp: Opportunity, trade_id: int) -> None:
-        """Fire both legs concurrently; reconcile partial fills."""
+        """Fire both legs concurrently; reconcile partial fills.
+
+        Defense-in-depth: even if a caller bypasses ``handle``'s guard, this path
+        refuses to run in the crypto-research build.
+        """
+        self._assert_live_allowed()
         if len(opp.legs) != 2:
             # Bundle live execution: fire all in parallel, no recovery (prices are atomic on Polymarket).
             tasks = [self._submit(leg, trade_id) for leg in opp.legs]

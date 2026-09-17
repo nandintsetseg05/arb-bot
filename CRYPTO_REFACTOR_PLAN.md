@@ -1,0 +1,184 @@
+# CRYPTO_REFACTOR_PLAN.md — evidence-first, crypto-only paper-research system
+
+**Status:** planning. Supersedes the general-purpose direction in `REFACTOR_PLAN.md` for the
+first build. This document maps our safety rules onto the *actual current code* in this repo and
+divides the work into phases with file-level detail, tests, and exit criteria.
+
+---
+
+## 0. The permanent rules (non-negotiable)
+
+These apply to every phase. If a rule and a feature conflict, the rule wins.
+
+1. **Evidence rule.** Nothing is labelled `arbitrage`, `risk-free`, or `profitable` unless it is
+   backed by (a) retained raw source data, (b) exact current fee inputs, (c) documented settlement
+   equivalence, and (d) a reproducible calculation. Missing/uncertain data → **reject and record the
+   exact reason**. Never guess.
+2. **Scope.** BTC and ETH only, initially. Short-window markets (15-minute first).
+3. **Paper only.** No live orders, no wallet/private keys, no trading credentials, no funding path.
+   Live mode is **hard-disabled and fails closed** if invoked.
+4. **Settlement-equivalence gate.** Reject a cross-venue pair if *any* material settlement condition
+   differs: source provider, source instrument, observation window/timestamp, averaging method,
+   comparison operator (`>` vs `>=`), tie handling, void/cancellation policy, settlement timing.
+5. **Executable economics only.** Edge is computed from real order-book asks + available depth with
+   synchronized timestamps and stale-book detection. **Decimal money math only** — no float for money.
+6. **Immutable audit.** Store raw books, rule snapshots, fee snapshots, scanner decisions, paper
+   orders, simulated fills, rejections — with source + receive timestamps.
+7. **Reports separate the four numbers:** observed price gap → fee-adjusted theoretical margin →
+   simulated executable P&L → rejected candidates + reasons. Theoretical margin is never shown as
+   realized profit.
+
+### Verified facts this plan is built on (re-confirm at build time; these changed in Aug 2026)
+- **Kalshi crypto** settles on **CF Benchmarks** Real-Time Index (BRTI), 60-second average in the
+  final minute. Source: Kalshi Help Center — Crypto Markets.
+- **Polymarket 15-min up/down** settles on a **Chainlink** BTC/USD **TWAP** (60-second window),
+  Up when end ≥ start. Source: Genfinity / CryptoSlate (Aug 2026 Chainlink TWAP rollout).
+- ⇒ **Different index providers** (CF Benchmarks vs Chainlink) ⇒ cross-venue BTC pairs are
+  **NOT locked arbitrage**. Both use a 60s window and `≥`, so the residual risk is *source
+  divergence*, not method. Crypto is a clean binary (`≥` ⇒ no draw), unlike sports.
+- **cutupdev/Polymarket-Kalshi-Arbitrage-Bot**: rule is `poly_up + kalshi_down < ~90¢` (or reverse),
+  **places live orders**, ignores settlement source/fees/depth/slippage, **no license**. Use as a
+  *structural reference only*; do not copy code.
+
+### Three additions beyond the original brief
+- **A. Intra-venue locked scanner first.** The only truly source-risk-free structure is buying both
+  complementary legs on the *same* market/same settlement source (Kalshi YES+NO, or Polymarket
+  UP+DOWN) when asks sum to `< $1` after fees. Build this before cross-venue.
+- **B. Post-expiry divergence recorder.** After each window resolves, log the realized settlement
+  value from *both* CF Benchmarks and Chainlink and count how often UP/DOWN disagree. This is the
+  experiment that actually measures cross-venue risk instead of only assuming it.
+- **C. Read rules from the live market page and snapshot them.** Never hard-code a settlement rule
+  from a blog; capture it per-market and store the snapshot.
+
+---
+
+## Keep / change / remove in the current code
+
+| Current code | Decision |
+|---|---|
+| `src/analysis/slippage_estimator.py` (`walk_asks`/`walk_bids`) | **Keep** — real depth walking is exactly right; add malformed/unsorted-book guards + tests. |
+| `src/storage/` SQLite discipline (WAL, audit tables) | **Keep + extend** with registry/observation/rule/fee/divergence tables. |
+| `src/risk/circuit_breaker.py`, `position_limits.py` | **Keep** for paper; persistence deferred (no live). |
+| `tests/` structure (pytest, parametrized fixtures) | **Keep + greatly expand.** |
+| `src/matching/market_matcher.py` + `fuzzy.py` (title similarity → auto-trade) | **Remove from the decision path.** Title similarity may *suggest* candidates but must NEVER make a pair eligible. Replace with an explicit **contract-pair registry + manual review**. |
+| `src/execution/executor.py` `_execute_live`, `scripts/live_run.py` | **Hard-disable / fail-closed.** Keep the paper path; rewrite it into a realistic simulator. |
+| `edge_calculator.py` float money math; Polymarket `fee_usd=0.0`; hard-coded 2% | **Replace** with a decimal fee adapter that stores exact inputs and rejects when fee data is unavailable. |
+| `scripts/runner.py` cross-exchange + bundle loop, title-matched | **Rewrite** into a crypto-only loop driven by the registry, with two scanners (intra-venue locked, cross-venue relative-value). |
+| `src/clients/base.py` `Market` (only yes/no token ids) | **Extend** with a `ContractSpec` carrying settlement metadata + all outcome token ids. |
+
+---
+
+## Phases
+
+Each phase is self-contained and ends with tests + an exit criterion. Do them in order.
+
+### Phase 0 — Safety lockdown & scope (0.5 day)
+**Goal:** make it impossible to trade live before anything else.
+- `src/config/settings.py`: add `assets_allowlist=["BTC","ETH"]`, `market_window="15m"`,
+  `paper_only=True` (default, and the *only* honored value for now). Make `live_trading_enabled`
+  ignored/forced false; add a `assert_paper_only()` that raises if any live path is reached.
+- `scripts/live_run.py`: replace body with a hard `sys.exit` explaining live mode is disabled in the
+  crypto-research build. `src/execution/executor.py`: `_execute_live` raises `LiveTradingDisabled`.
+- **Tests:** `test_live_mode_fail_closed.py` — asserts every live entry point raises/exits.
+- **Exit:** no code path can place a real order; test proves it.
+
+### Phase 1 — Verify reality & snapshot rules (0.5 day, mostly research)
+**Goal:** confirm the current 2026 API + settlement facts against primary docs, not this file.
+- Confirm Kalshi crypto **series tickers** (e.g. BTC/ETH 15-min series), markets + orderbook
+  endpoints, cursor pagination. Confirm Polymarket **Gamma** fields for 15-min up/down markets
+  (condition id, `clobTokenIds`, `endDate`, rules text).
+- Write `docs/settlement_rules/` with a saved snapshot (JSON + source URL + fetch timestamp) for each
+  venue/asset/window. This is *data*, versioned in the repo.
+- **Exit:** a committed rules snapshot per (venue, asset, window); any unverifiable claim marked
+  `UNVERIFIED` and excluded from logic.
+
+### Phase 2 — Data model & contract-pair registry (1–2 days)
+**Goal:** replace title matching with explicit, reviewed contract specs.
+- `src/clients/base.py`: add `ContractSpec` (asset, venue, market/ticker id, all outcome token ids,
+  outcome mapping, UTC start/end, settlement source, instrument, window seconds, operator, averaging
+  method, tie rule, void policy, rules-snapshot ref, review_status, reviewer_note). Extend `Market`
+  to carry outcome token ids for multi-outcome (also fixes the known bundle-discovery bug).
+- New `src/registry/pair_registry.py`: load/validate a `contract_pairs` table; a pair is only
+  `ELIGIBLE` after `review_status == "approved"`.
+- `src/storage/schema.sql` + `db.py`: tables `contract_specs`, `contract_pairs`, `rule_snapshots`.
+- **Tests:** registry load/validate; unreviewed pair is never eligible.
+- **Exit:** can register a BTC 15-min pair by asset + exact UTC window; ineligible until approved.
+
+### Phase 3 — Settlement-equivalence validator + truth table (1–2 days) ← rules core
+**Goal:** the gate that decides locked vs relative-value vs reject.
+- New `src/matching/settlement_equivalence.py`: compare two `ContractSpec`s field by field; produce
+  `EquivalenceResult{status, mismatches[]}` where status ∈ `{LOCKED, NOT_LOCKED_ARBITRAGE, REJECT}`.
+  Current BTC cross-venue ⇒ `NOT_LOCKED_ARBITRAGE, reason=source CF Benchmarks ≠ Chainlink`.
+- New `src/analysis/truth_table.py`: enumerate the payout matrix for a candidate paired trade and
+  confirm which index-outcome combinations pay both / one / neither leg.
+- **Tests:** `test_settlement_equivalence.py` (source/instrument/window/operator/tie/void mismatches
+  each force the right status); `test_truth_table.py` (both-lose branch is detected).
+- **Exit:** no pair can reach the economics stage labelled "locked" unless equivalence == LOCKED.
+
+### Phase 4 — Crypto discovery + sequenced order-book capture (2–3 days)
+**Goal:** real, timestamped books for the registered pairs; immutable storage.
+- `kalshi_client.py` / `polymarket_client.py`: discovery filtered to the crypto series/assets;
+  fetch order books with `exchange_ts`, `received_ts`, `sequence`, `connection_state`; stale-book
+  detection (`received - exchange > max_age → mark stale`). WebSocket is a later optimization —
+  start with correctly-sequenced REST snapshots, but record sequence + timestamps now.
+- `src/storage`: `orderbook_observations` table (immutable, append-only) + writer.
+- **Tests:** book parsing incl. malformed/unsorted levels; stale detection; Kalshi YES/NO mirror math.
+- **Exit:** for each registered pair, both venues' books are captured continuously with timestamps.
+
+### Phase 5 — Executable economics: decimal fees + full-depth + two scanners (2–3 days)
+**Goal:** correct money math and the actual opportunity detection.
+- Convert `edge_calculator.py` money math to `decimal.Decimal`. New `src/analysis/fee_engine.py`:
+  `fee(venue, market, side, price, size, role, time)` using snapshotted current schedules; store
+  exact inputs + formula version per computed fee; **reject if fee data unavailable**.
+- Keep/extend `walk_asks`/`walk_bids` for full-depth VWAP and max matched pairs.
+- **Scanner A (intra-venue LOCKED):** same market, complementary legs, `Σ ask < $1` after fees.
+- **Scanner B (cross-venue RELATIVE-VALUE):** only for `NOT_LOCKED_ARBITRAGE` pairs; computes the
+  price gap but labels it directional-risk, never "arbitrage."
+- **Tests:** decimal fee formula + rounding at boundaries; VWAP/max-pairs; scanner labelling
+  (A→locked, B→relative_value), min-edge gating.
+- **Exit:** every detected opportunity carries a status label + the four separated numbers.
+
+### Phase 6 — Conservative paper-fill simulator + audit (2–3 days)
+**Goal:** simulate what would *actually* happen; persist everything.
+- Rewrite `executor._execute_paper` into a simulator: configurable latency allowance, partial fills,
+  one-leg-fill exposure, cancellation, stale-book rejection; **never assume cross-venue orders are
+  atomic.** Reuse `partial_fill_recovery` semantics for the one-leg case (log naked exposure).
+- `src/storage`: `paper_orders`, `simulated_fills`, `scanner_decisions`, `rejections`.
+- **Tests:** both-fill / one-leg-fill / partial / stale-reject / latency-decay scenarios.
+- **Exit:** a paper run produces a full immutable audit trail per opportunity.
+
+### Phase 7 — Post-expiry settlement divergence recorder (1–2 days) ← the measurement
+**Goal:** measure cross-venue risk empirically (addition B).
+- New `src/research/settlement_divergence.py` + `settlement_outcomes` table: after each window
+  resolves, fetch/record the realized CF Benchmarks and Chainlink values (or the venue-reported
+  resolutions) and flag agree/disagree + magnitude.
+- **Tests:** divergence flagged when the two sources imply different UP/DOWN.
+- **Exit:** a running tally of "how often did the two indices disagree, and by how much."
+
+### Phase 8 — Reports & dashboard (1–2 days)
+**Goal:** make the evidence legible; enforce the "four numbers" rule in the UI.
+- `dashboard/app.py`: sections for observed gap, fee-adjusted theoretical margin, simulated
+  executable P&L, max matched size, partial-fill rate, rejected candidates + reasons, and the
+  divergence tally. Locked vs relative-value clearly separated. Data limitations shown explicitly.
+- **Exit:** dashboard never presents theoretical margin as realized profit.
+
+### Phase 9 — Test suite + CI hardening (ongoing)
+- Full matrix: truth tables, settlement-mismatch rejection, tie/equality, decimal fees + rounding,
+  depth/VWAP, stale-book rejection, partial/one-leg fills, fail-closed live, registry eligibility.
+- CI: make mypy strict blocking on new modules; pin dependencies (add a lockfile).
+
+### Gate — evaluate, then (only maybe) discuss a tiny live pilot
+Run Scanners A+B in paper for a sustained, reproducible period. Only if the recorded evidence passes
+the safety gates (eligibility confirmed, positive out-of-sample after fees/fills, simulator matches
+reality, kill-switch tested) do we *discuss* a tiny live pilot — a separate decision, not automatic.
+Expected honest outcome: cross-venue BTC is rejected as not-locked; intra-venue rarely fires after
+fees. Proving that cheaply, with our own data, is a valid success.
+
+---
+
+## Known current-code bugs to fix along the way (from PROJECT_ASSESSMENT.md)
+- Live execution reported as success even on partial/rejected legs (`executor.handle` / `_execute_live`).
+  Resolved implicitly by Phase 0 (live disabled) but fix the outcome-propagation logic in the paper path.
+- Bundle scan can't discover ≥3-outcome markets (`runner.scan_once` builds only yes/no token ids).
+  Fixed by the multi-outcome `ContractSpec` in Phase 2.
+- No tests on money-moving paths — addressed across Phases 3–9.

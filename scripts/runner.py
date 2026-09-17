@@ -1,4 +1,10 @@
-"""Shared scan-loop logic used by both paper_run.py and live_run.py."""
+"""Crypto-only scan loop (paper research). Driven by the reviewed contract-pair registry.
+
+Replaces the old title-matcher + cross/bundle analyzer path. For each eligible registered
+pair it runs the intra-venue locked scan and the validator-gated cross-venue scan, and logs
+every labelled result. No orders are placed — live execution is disabled (Phase 0), and paper
+fill simulation + audit persistence arrive in Phase 6.
+"""
 
 from __future__ import annotations
 
@@ -12,15 +18,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.analysis.arbitrage_analyzer import ArbitrageAnalyzer  # noqa: E402
-from src.clients.base import BaseExchangeClient, Outcome, Venue  # noqa: E402
+from src.analysis.crypto_scan import ScanRecord, scan_all  # noqa: E402
+from src.clients.base import BaseExchangeClient, Venue  # noqa: E402
 from src.clients.kalshi_client import KalshiClient  # noqa: E402
 from src.clients.polymarket_client import PolymarketClient  # noqa: E402
 from src.config.settings import Settings, get_settings  # noqa: E402
-from src.execution.executor import ExecutionMode, Executor  # noqa: E402
-from src.matching.market_matcher import MarketMatcher  # noqa: E402
+from src.execution.executor import ExecutionMode  # noqa: E402
+from src.registry.pair_registry import ContractPair, eligible_pairs  # noqa: E402
 from src.risk.circuit_breaker import CircuitBreaker  # noqa: E402
-from src.risk.position_limits import PositionLimits  # noqa: E402
 from src.storage.db import Database  # noqa: E402
 from src.utils.logger import get_logger, setup_logging  # noqa: E402
 
@@ -64,137 +69,61 @@ async def snapshot_balances(
 
 
 async def scan_once(
-    *,
     clients: dict[Venue, BaseExchangeClient],
-    matcher: MarketMatcher,
-    analyzer: ArbitrageAnalyzer,
-    executor: Executor,
-) -> int:
-    """One scan cycle. Returns number of opportunities handled."""
-    poly_client = clients[Venue.POLYMARKET]
-    kalshi_client = clients[Venue.KALSHI]
-
-    poly_markets, kalshi_markets = await asyncio.gather(
-        poly_client.list_markets(active_only=True),
-        kalshi_client.list_markets(active_only=True),
+    pairs: list[ContractPair],
+    settings: Settings,
+) -> list[ScanRecord]:
+    """One scan cycle over all eligible pairs; logs every labelled result."""
+    records = await scan_all(
+        clients,
+        pairs,
+        poly_fee_bps=settings.polymarket_taker_fee_bps,
+        max_notional_usd=settings.max_position_usd,
     )
-    matches = matcher.match(poly_markets, kalshi_markets)
-    handled = 0
-
-    for pair in matches:
-        if not pair.polymarket.yes_token_id or not pair.polymarket.no_token_id:
-            continue
-        try:
-            ob_poly_yes, ob_poly_no, ob_k_yes, ob_k_no = await asyncio.gather(
-                poly_client.get_orderbook(pair.polymarket.yes_token_id, Outcome.YES),
-                poly_client.get_orderbook(pair.polymarket.no_token_id, Outcome.NO),
-                kalshi_client.get_orderbook(pair.kalshi.market_id, Outcome.YES),
-                kalshi_client.get_orderbook(pair.kalshi.market_id, Outcome.NO),
-            )
-        except Exception as exc:
-            logger.warning(
-                "orderbook fetch failed",
-                extra={
-                    "poly": pair.polymarket.market_id,
-                    "kalshi": pair.kalshi.market_id,
-                    "err": str(exc),
-                },
-            )
-            continue
-        opp = analyzer.detect_cross_exchange(
-            pair,
-            ob_poly_yes=ob_poly_yes,
-            ob_poly_no=ob_poly_no,
-            ob_kalshi_yes=ob_k_yes,
-            ob_kalshi_no=ob_k_no,
+    for rec in records:
+        r = rec.result
+        logger.info(
+            "scan",
+            extra={
+                "pair": rec.pair_id,
+                "strategy": rec.strategy,
+                "label": r.label,
+                "net_usd": str(r.net_edge_usd),
+                "contracts": r.contracts,
+                "reason": r.reason,
+                "mismatches": list(r.mismatches),
+            },
         )
-        if opp is not None:
-            decision = await executor.handle(opp)
-            handled += 1
-            logger.info(
-                "opportunity",
-                extra={
-                    "type": opp.arb_type.value,
-                    "edge_bps": opp.edge_bps,
-                    "net": opp.net_edge_usd,
-                    "decision": decision.reason,
-                    "review_required": opp.review_required,
-                },
-            )
-
-    # Bundle scan: any Polymarket market with 3+ outcomes is a candidate; for MVP
-    # we restrict to multi-outcome markets we already saw.
-    for m in poly_markets:
-        token_ids: list[str] = []
-        if m.yes_token_id:
-            token_ids.append(m.yes_token_id)
-        if m.no_token_id:
-            token_ids.append(m.no_token_id)
-        if len(token_ids) < 2 or len(m.outcomes) < 3:
-            continue
-        try:
-            books = await asyncio.gather(
-                *(
-                    poly_client.get_orderbook(tid, Outcome.YES if i == 0 else Outcome.NO)
-                    for i, tid in enumerate(token_ids)
-                )
-            )
-        except Exception:
-            continue
-        opp_long = analyzer.detect_bundle_long(m, books)
-        if opp_long is not None:
-            await executor.handle(opp_long)
-            handled += 1
-        opp_short = analyzer.detect_bundle_short(m, books)
-        if opp_short is not None:
-            await executor.handle(opp_short)
-            handled += 1
-    return handled
+    return records
 
 
 async def run_loop(*, mode: ExecutionMode) -> None:
     settings = get_settings()
     setup_logging(settings.log_level)
-    logger.info("starting", extra={"mode": mode.value, "kalshi_env": settings.kalshi_env.value})
+    logger.info(
+        "starting crypto scan",
+        extra={"mode": mode.value, "kalshi_env": settings.kalshi_env.value},
+    )
 
     db = Database(settings.db_full_path)
     breaker = CircuitBreaker(drawdown_limit=settings.drawdown_limit)
-    limits = PositionLimits(
-        max_per_market_usd=settings.max_position_usd,
-        max_global_usd=settings.max_position_usd * 8,
-    )
     clients = build_clients(settings)
-    matcher = MarketMatcher(
-        auto_threshold=settings.match_auto_threshold,
-        review_threshold=settings.match_review_threshold,
-    )
-    analyzer = ArbitrageAnalyzer(
-        min_edge_bps=settings.min_edge_bps,
-        max_position_usd=settings.max_position_usd,
-    )
-    executor = Executor(
-        clients=clients,
-        db=db,
-        breaker=breaker,
-        limits=limits,
-        mode=mode,
-        opportunity_ttl_ms=settings.opportunity_ttl_ms,
-    )
+    pairs = eligible_pairs(settings.registry_full_path)
+    if not pairs:
+        logger.warning(
+            "no eligible pairs — approve+verify pairs in the registry to scan",
+            extra={"registry": str(settings.registry_full_path)},
+        )
 
     try:
         while True:
             t0 = time.time()
             try:
                 await snapshot_balances(clients, db, breaker)
-                count = await scan_once(
-                    clients=clients,
-                    matcher=matcher,
-                    analyzer=analyzer,
-                    executor=executor,
-                )
+                records = await scan_once(clients, pairs, settings)
                 logger.info(
                     "scan cycle complete",
-                    extra={"handled": count, "elapsed_s": time.time() - t0},
+                    extra={"records": len(records), "elapsed_s": time.time() - t0},
                 )
             except Exception:
                 logger.exception("scan cycle failed")

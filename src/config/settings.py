@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # against market metadata; window is the short-duration series we target first.
     crypto_assets: tuple[str, ...] = ("BTC", "ETH")
     market_window: str = "15m"
+    registry_path: str = "contract_pairs.json"
+    # Polymarket taker fee is per-market and not universally known. Unknown by
+    # default => the scanners reject Polymarket-fee candidates rather than guess.
+    polymarket_taker_fee_bps: int | None = None
 
     # Matching
     match_auto_threshold: float = 0.85
@@ -100,6 +104,11 @@ class Settings(BaseSettings):
     @property
     def db_full_path(self) -> Path:
         p = Path(self.db_path)
+        return p if p.is_absolute() else REPO_ROOT / p
+
+    @property
+    def registry_full_path(self) -> Path:
+        p = Path(self.registry_path)
         return p if p.is_absolute() else REPO_ROOT / p
 
     @property

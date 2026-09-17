@@ -1,15 +1,16 @@
 """Crypto-only scan loop (paper research). Driven by the reviewed contract-pair registry.
 
 Replaces the old title-matcher + cross/bundle analyzer path. For each eligible registered
-pair it runs the intra-venue locked scan and the validator-gated cross-venue scan, and logs
-every labelled result. No orders are placed — live execution is disabled (Phase 0), and paper
-fill simulation + audit persistence arrive in Phase 6.
+pair it runs the intra-venue locked scan and the validator-gated cross-venue scan, records
+every labelled result to SQLite (the proprietary dataset), and logs it. No orders are placed
+— live execution is disabled (Phase 0). Latency/partial-fill simulation waits on Phase 4
+sequenced book capture.
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
+import json
 import sys
 import time
 from pathlib import Path
@@ -18,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.analysis.crypto_scan import ScanRecord, scan_all  # noqa: E402
+from src.analysis.crypto_scan import ScanRecord, paper_decision, scan_all  # noqa: E402
 from src.clients.base import BaseExchangeClient, Venue  # noqa: E402
 from src.clients.kalshi_client import KalshiClient  # noqa: E402
 from src.clients.polymarket_client import PolymarketClient  # noqa: E402
@@ -72,8 +73,9 @@ async def scan_once(
     clients: dict[Venue, BaseExchangeClient],
     pairs: list[ContractPair],
     settings: Settings,
+    db: Database,
 ) -> list[ScanRecord]:
-    """One scan cycle over all eligible pairs; logs every labelled result."""
+    """One scan cycle: scan every eligible pair, persist an immutable record, log it."""
     records = await scan_all(
         clients,
         pairs,
@@ -82,16 +84,29 @@ async def scan_once(
     )
     for rec in records:
         r = rec.result
+        decision = paper_decision(r)
+        db.insert_scan_record(
+            pair_id=rec.pair_id,
+            strategy=rec.strategy,
+            label=r.label,
+            paper_decision=decision,
+            contracts=r.contracts,
+            cost_per_set_usd=str(r.cost_per_set_usd),
+            fees_usd=str(r.fees_usd),
+            net_edge_usd=str(r.net_edge_usd),
+            reason=r.reason,
+            mismatches=json.dumps(list(r.mismatches)),
+        )
         logger.info(
             "scan",
             extra={
                 "pair": rec.pair_id,
                 "strategy": rec.strategy,
                 "label": r.label,
+                "decision": decision,
                 "net_usd": str(r.net_edge_usd),
                 "contracts": r.contracts,
                 "reason": r.reason,
-                "mismatches": list(r.mismatches),
             },
         )
     return records
@@ -120,7 +135,7 @@ async def run_loop(*, mode: ExecutionMode) -> None:
             t0 = time.time()
             try:
                 await snapshot_balances(clients, db, breaker)
-                records = await scan_once(clients, pairs, settings)
+                records = await scan_once(clients, pairs, settings, db)
                 logger.info(
                     "scan cycle complete",
                     extra={"records": len(records), "elapsed_s": time.time() - t0},

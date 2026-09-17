@@ -99,6 +99,23 @@ class Database:
         with self._lock:
             self._conn.execute(f"UPDATE trades SET {sets} WHERE id = :trade_id", fields)
 
+    def insert_scan_record(self, **fields: Any) -> int:
+        fields.setdefault("observed_at", _utcnow_iso())
+        cols = ", ".join(fields.keys())
+        placeholders = ", ".join(f":{k}" for k in fields)
+        with self._lock:
+            cur = self._conn.execute(
+                f"INSERT INTO scan_records ({cols}) VALUES ({placeholders})", fields
+            )
+            return int(cur.lastrowid or 0)
+
+    def recent_scan_records(self, limit: int = 200) -> list[sqlite3.Row]:
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT * FROM scan_records ORDER BY observed_at DESC LIMIT ?", (limit,)
+            )
+            return cur.fetchall()
+
     def snapshot_balance(self, venue: str, balance_usd: float, note: str | None = None) -> None:
         with self._lock:
             self._conn.execute(

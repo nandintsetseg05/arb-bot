@@ -65,6 +65,28 @@ CREATE TABLE IF NOT EXISTS legs (
 
 CREATE INDEX IF NOT EXISTS idx_legs_trade ON legs(trade_id);
 
+-- Immutable audit of every scan result (locked / relative_value / reject alike).
+-- This IS the proprietary dataset: what we saw, when, and why we did or didn't act.
+-- Money is stored as TEXT to preserve exact Decimal values (no float in the DB).
+CREATE TABLE IF NOT EXISTS scan_records (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    observed_at      TEXT NOT NULL,
+    pair_id          TEXT NOT NULL,
+    strategy         TEXT NOT NULL,              -- intra_kalshi_locked / cross_* / ...
+    label            TEXT NOT NULL,              -- locked / relative_value / reject
+    paper_decision   TEXT NOT NULL,              -- execute / skip_no_edge / observe_relative_value / reject
+    contracts        INTEGER NOT NULL,
+    cost_per_set_usd TEXT NOT NULL,              -- Decimal as text
+    fees_usd         TEXT NOT NULL,
+    net_edge_usd     TEXT NOT NULL,
+    reason           TEXT,
+    mismatches       TEXT                        -- JSON list of differing settlement fields
+);
+
+CREATE INDEX IF NOT EXISTS idx_scan_observed ON scan_records(observed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scan_label ON scan_records(label);
+CREATE INDEX IF NOT EXISTS idx_scan_decision ON scan_records(paper_decision);
+
 CREATE TABLE IF NOT EXISTS balance_snapshots (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     captured_at     TEXT NOT NULL,

@@ -14,8 +14,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from decimal import Decimal
 
 from src.analysis.crypto_scanner import (
+    REJECT,
+    RELATIVE_VALUE,
     ScanResult,
     scan_cross_venue,
     scan_intra_venue_locked,
@@ -31,6 +34,24 @@ class ScanRecord:
     pair_id: str
     strategy: str          # intra_kalshi_locked | intra_poly_locked | cross_*
     result: ScanResult
+
+
+def paper_decision(result: ScanResult) -> str:
+    """Conservative paper decision from real numbers only — no guessed haircuts.
+
+    'execute' is reserved for a LOCKED structure with positive net edge (the only
+    source-risk-free case). A relative_value gap is recorded to observe, never executed.
+
+    ponytail: TODO — latency-decay / partial-fill / one-leg simulation needs a *second*
+    book observation to compare against; that arrives with Phase 4 sequenced capture /
+    the replay engine. Until then we do not invent a fill haircut.
+    """
+    if result.label == REJECT:
+        return "reject"
+    if result.label == RELATIVE_VALUE:
+        return "observe_relative_value"
+    # LOCKED
+    return "execute" if result.net_edge_usd > Decimal("0") else "skip_no_edge"
 
 
 async def scan_pair(

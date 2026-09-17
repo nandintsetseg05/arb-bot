@@ -145,14 +145,21 @@ Each phase is self-contained and ends with tests + an exit criterion. Do them in
   (A→locked, B→relative_value), min-edge gating.
 - **Exit:** every detected opportunity carries a status label + the four separated numbers.
 
-### Phase 6 — Conservative paper-fill simulator + audit (2–3 days)
-**Goal:** simulate what would *actually* happen; persist everything.
-- Rewrite `executor._execute_paper` into a simulator: configurable latency allowance, partial fills,
-  one-leg-fill exposure, cancellation, stale-book rejection; **never assume cross-venue orders are
-  atomic.** Reuse `partial_fill_recovery` semantics for the one-leg case (log naked exposure).
-- `src/storage`: `paper_orders`, `simulated_fills`, `scanner_decisions`, `rejections`.
-- **Tests:** both-fill / one-leg-fill / partial / stale-reject / latency-decay scenarios.
-- **Exit:** a paper run produces a full immutable audit trail per opportunity.
+### Phase 6a — Audit persistence + honest paper decision (DONE)
+**Goal:** record the proprietary dataset; decide only from real numbers.
+- `schema.sql`: `scan_records` table (immutable; money stored as TEXT = exact Decimal).
+  `db.insert_scan_record` / `recent_scan_records`.
+- `crypto_scan.paper_decision`: `execute` (LOCKED + net>0) / `skip_no_edge` / `observe_relative_value`
+  / `reject` — no invented haircut.
+- `runner.scan_once`: persists every ScanRecord (including rejects + reasons) then logs it.
+- **Tests:** decision mapping + scan-record round-trip.
+
+### Phase 6b — Latency/partial-fill simulator (DEFERRED to after Phase 4)
+A faithful fill sim (latency decay, partial, one-leg exposure, stale-book) needs a *second*
+book observation to compare against, which only Phase 4 sequenced capture / the replay engine
+provides. Building a haircut model before then would be guessing (evidence rule). Marked with a
+`ponytail:` TODO in `paper_decision`. When Phase 4 lands: add `paper_fills`/`simulated_fills`
+tables and the both-fill / one-leg / partial / stale-reject / latency-decay scenarios.
 
 ### Phase 7 — Post-expiry settlement divergence recorder (1–2 days) ← the measurement
 **Goal:** measure cross-venue risk empirically (addition B).
